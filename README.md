@@ -13,8 +13,18 @@ Important information related to BigTreeTech's TFT touchscreen 3D printer contro
 
 > [!IMPORTANT]
 > This is an unofficial, paired firmware fork. Its exact recovery protocol
-> requires the matching modified Marlin firmware. Using only one half of the
-> pair falls back to less precise recovery behavior.
+> requires the matching
+> [Marlin-btt-tft-exact-plr firmware](https://github.com/dominikp3/Marlin-btt-tft-exact-plr).
+> Using only one half of the pair falls back to less precise recovery behavior.
+
+### Upstream base and paired firmware
+
+This fork is based on the official BIGTREETECH TouchScreenFirmware
+[`Vx.x.28` tag](https://github.com/bigtreetech/BIGTREETECH-TouchScreenFirmware/tree/Vx.x.28).
+It must be used with the paired
+[Marlin-btt-tft-exact-plr](https://github.com/dominikp3/Marlin-btt-tft-exact-plr)
+fork. When releases are published, use matching release versions from both
+repositories.
 
 This fork adds command-accurate power-loss recovery for prints streamed from
 TFT media to Marlin over the serial connection. It was developed and tested
@@ -82,12 +92,35 @@ Delete any old `Printing.sys` before first booting this fork. The file format
 is versioned and is not compatible with recovery records produced by the
 upstream firmware or older revisions of this fork.
 
+### Prebuilt firmware
+
+A precompiled TFT35 E3 V3.0 binary is included in the
+[`Copy to SD Card root directory to update`](./Copy%20to%20SD%20Card%20root%20directory%20to%20update/)
+directory, following the layout of the upstream project. It is provided only
+for the display model on which this fork was tested. No untested binaries are
+provided for other display models; build the appropriate PlatformIO target
+from source instead.
+
+Published versions should also attach this tested binary to the corresponding
+GitHub Release so that its source revision and matching Marlin release are
+unambiguous.
+
 ### Safety and scope
 
 Do not flash a prebuilt binary only because the display model matches. Verify
 the display target, serial speed, printer dimensions, UPS behavior, homing
 directions, and available Z travel first. The paired Marlin configuration in
 the companion fork is machine-specific.
+
+### Development and warranty notice
+
+Parts of this implementation and documentation were developed with assistance
+from OpenAI Codex. The maintainer reviewed the changes and performed the
+hardware tests described above. The firmware is provided without warranty;
+successful tests on the listed hardware do not guarantee correct behavior for
+every printer configuration, storage medium, timing condition, or failure
+mode. Test recovery in controlled conditions before relying on it for an
+unattended print.
 
 This fork remains licensed under GPL-3.0. It is not an official BIGTREETECH or
 Marlin release.
