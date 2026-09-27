@@ -9,12 +9,96 @@
 
 Important information related to BigTreeTech's TFT touchscreen 3D printer controllers
 
+## Exact BTT UPS Power-Loss Recovery Fork
+
+> [!IMPORTANT]
+> This is an unofficial, paired firmware fork. Its exact recovery protocol
+> requires the matching modified Marlin firmware. Using only one half of the
+> pair falls back to less precise recovery behavior.
+
+This fork adds command-accurate power-loss recovery for prints streamed from
+TFT media to Marlin over the serial connection. It was developed and tested
+with:
+
+- Ender 3;
+- BIGTREETECH SKR E3 Turbo (LPC1769);
+- BIGTREETECH TFT35 E3 V3.0;
+- BIGTREETECH Mini UPS 24 V;
+- HallON v3 mechanically deployed Z probe.
+
+### Improvements in this fork
+
+- Tracks the G-code file offset and checksummed serial line number for every
+  command accepted by Marlin.
+- Replays the interrupted motion instead of resuming after commands that may
+  only have been acknowledged and buffered.
+- Receives the active line identifier plus exact physical Z and E positions
+  from Marlin in an extended
+  `//action:powerloss N... Z... E...` message.
+- Stores a versioned `Printing.sys` record and rejects stale or incompatible
+  records instead of interpreting them as current data.
+- Saves a synchronized pause-origin checkpoint before retracting and parking.
+- Correctly compensates both the TFT pause retract and the UPS emergency
+  retract, preventing resumed printing in air.
+- Restores native Z with `G92.9`, avoiding accumulated `G92` workspace
+  offsets during repeated outages in the same print.
+- Homes X/Y without homing Z, moves X to 0 to release the HallON deployment
+  button, and waits for the heaters before priming and returning to the print.
+- Resynchronizes checksummed serial traffic with `M110` after startup and
+  suppresses the harmless truncated-line warning caused by an outage.
+- Retains a conservative motion-history fallback if the final extended
+  power-loss message cannot be used.
+
+### Tested recovery cases
+
+- Power loss during ordinary printing.
+- Power loss after a TFT pause has completely parked the nozzle.
+- Power loss while the TFT pause is still raising Z.
+- A second power loss after an earlier successful recovery of the same print.
+
+All four cases resumed at the expected layer height and extrusion point during
+testing.
+
+### Required TFT configuration
+
+The validated setup uses:
+
+```ini
+command_checksum:1
+advanced_ok:0
+pl_recovery:1
+pl_recovery_home:0
+pl_recovery_z_raise:10.0
+btt_mini_ups:1
+pause_retract:R15.0 P16.0
+pause_z_raise:10.0
+```
+
+`pl_recovery_home:0` is intentional: it performs X/Y-only homing and avoids
+an unsafe Z home into the existing print. Adapt the raise and retract values to
+your mechanics and extruder.
+
+Delete any old `Printing.sys` before first booting this fork. The file format
+is versioned and is not compatible with recovery records produced by the
+upstream firmware or older revisions of this fork.
+
+### Safety and scope
+
+Do not flash a prebuilt binary only because the display model matches. Verify
+the display target, serial speed, printer dimensions, UPS behavior, homing
+directions, and available Z travel first. The paired Marlin configuration in
+the companion fork is machine-specific.
+
+This fork remains licensed under GPL-3.0. It is not an official BIGTREETECH or
+Marlin release.
+
 ![TFT35v3 Image with cable](https://user-images.githubusercontent.com/54359396/115433717-25a5e800-a208-11eb-9bd1-8a66b4780cf7.png)
 
 <!-- omit in toc -->
 
 ## Table of Contents
 
+- [Exact BTT UPS Power-Loss Recovery Fork](#exact-btt-ups-power-loss-recovery-fork)
 - [Supported Screens](#supported-screens)
 - [Software Repository](#software-repository)
 - [Marlin Dependencies](#marlin-dependencies)
