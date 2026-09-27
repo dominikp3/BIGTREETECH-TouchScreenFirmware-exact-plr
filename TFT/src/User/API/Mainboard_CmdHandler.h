@@ -39,6 +39,9 @@ void handleCmd(CMD cmd, const SERIAL_PORT_INDEX portIndex);
 void sendEmergencyCmd(const CMD emergencyCmd, const SERIAL_PORT_INDEX portIndex);
 void sendQueueCmd(void);
 
+bool storePrintCmdFromUART(const CMD cmd, const SERIAL_PORT_INDEX portIndex,
+                           uint32_t plrStartOffset, uint32_t plrEndOffset);
+
 #ifdef __cplusplus
 }
 #endif

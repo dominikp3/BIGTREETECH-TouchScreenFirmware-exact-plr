@@ -9,6 +9,9 @@ typedef struct
 {
   CMD gcode;
   SERIAL_PORT_INDEX port_index;  // 0: for SERIAL_PORT, 1: for SERIAL_PORT_2 etc.
+  uint32_t plr_start_offset;
+  uint32_t plr_end_offset;
+  bool plr_offset_valid;
 } GCODE_INFO;
 
 typedef struct
@@ -36,6 +39,11 @@ typedef enum
 
 static GCODE_QUEUE cmdQueue;                    // command queue where commands to be sent are stored
 static GCODE_RETRY_INFO cmdRetryInfo = {0};     // command retry info. Required COMMAND_CHECKSUM feature enabled in TFT
+
+static uint32_t cmd_plr_start_offset = 0;
+static uint32_t cmd_plr_end_offset = 0;
+static bool cmd_plr_offset_valid = false;
+static bool cmd_plr_motion = false;
 
 static char * cmd_ptr;
 static uint8_t cmd_len;
@@ -94,6 +102,11 @@ static void commonStoreCmd(GCODE_QUEUE * pQueue, const char * format, va_list va
   vsnprintf(pQueue->queue[pQueue->index_w].gcode, CMD_MAX_SIZE, format, va);
 
   pQueue->queue[pQueue->index_w].port_index = PORT_1;  // port index for SERIAL_PORT
+
+  pQueue->queue[pQueue->index_w].plr_start_offset = 0;
+  pQueue->queue[pQueue->index_w].plr_end_offset = 0;
+  pQueue->queue[pQueue->index_w].plr_offset_valid = false;
+
   pQueue->index_w = (pQueue->index_w + 1) % CMD_QUEUE_SIZE;
   pQueue->count++;
 }
@@ -198,11 +211,48 @@ bool storeCmdFromUART(const CMD cmd, const SERIAL_PORT_INDEX portIndex)
   strncpy_no_pad(cmdQueue.queue[cmdQueue.index_w].gcode, cmd, CMD_MAX_SIZE);
 
   cmdQueue.queue[cmdQueue.index_w].port_index = portIndex;
+
+  cmdQueue.queue[cmdQueue.index_w].plr_start_offset = 0;
+  cmdQueue.queue[cmdQueue.index_w].plr_end_offset = 0;
+  cmdQueue.queue[cmdQueue.index_w].plr_offset_valid = false;
+
   cmdQueue.index_w = (cmdQueue.index_w + 1) % CMD_QUEUE_SIZE;
   cmdQueue.count++;
 
   return true;
 }
+
+
+bool storePrintCmdFromUART(const CMD cmd,
+                           const SERIAL_PORT_INDEX portIndex,
+                           uint32_t plrStartOffset,
+                           uint32_t plrEndOffset)
+{
+  if (cmd[0] == 0)
+    return false;
+
+  if (cmdQueue.count >= CMD_QUEUE_SIZE)
+  {
+    setReminderMsg(LABEL_BUSY, SYS_STATUS_BUSY);
+    return false;
+  }
+
+  strncpy_no_pad(cmdQueue.queue[cmdQueue.index_w].gcode,
+                 cmd,
+                 CMD_MAX_SIZE);
+
+  cmdQueue.queue[cmdQueue.index_w].port_index = portIndex;
+
+  cmdQueue.queue[cmdQueue.index_w].plr_start_offset = plrStartOffset;
+  cmdQueue.queue[cmdQueue.index_w].plr_end_offset = plrEndOffset;
+  cmdQueue.queue[cmdQueue.index_w].plr_offset_valid = true;
+
+  cmdQueue.index_w = (cmdQueue.index_w + 1) % CMD_QUEUE_SIZE;
+  cmdQueue.count++;
+
+  return true;
+}
+
 
 // clear all gcode cmd in cmdQueue queue
 void clearCmdQueue(void)
@@ -234,6 +284,9 @@ static inline bool getCmd(void)
 {
   cmd_ptr = &cmdQueue.queue[cmdQueue.index_r].gcode[0];          // gcode
   cmd_port_index = cmdQueue.queue[cmdQueue.index_r].port_index;  // index of serial port originating the gcode
+  cmd_plr_start_offset = cmdQueue.queue[cmdQueue.index_r].plr_start_offset;
+  cmd_plr_end_offset = cmdQueue.queue[cmdQueue.index_r].plr_end_offset;
+  cmd_plr_offset_valid = cmdQueue.queue[cmdQueue.index_r].plr_offset_valid;
 
   // strip out any leading space from the passed command.
   // Furthermore, skip any N[-0-9] (line number) and return a pointer to the beginning of the command
@@ -254,6 +307,9 @@ static inline void getCmdFromCmdRetryInfo(void)
 {
   cmd_ptr = cmdRetryInfo.gcode_info.gcode;
   cmd_port_index = cmdRetryInfo.gcode_info.port_index;
+  cmd_plr_start_offset = cmdRetryInfo.gcode_info.plr_start_offset;
+  cmd_plr_end_offset = cmdRetryInfo.gcode_info.plr_end_offset;
+  cmd_plr_offset_valid = cmdRetryInfo.gcode_info.plr_offset_valid;
   cmd_len = strlen(cmd_ptr);
 }
 
@@ -265,6 +321,10 @@ static inline void setCmdRetryInfo(uint32_t lineNumber)
 
   strncpy_no_pad(cmdRetryInfo.gcode_info.gcode, cmd_ptr, CMD_MAX_SIZE);  // copy command
   cmdRetryInfo.gcode_info.port_index = cmd_port_index;                   // copy port index
+
+  cmdRetryInfo.gcode_info.plr_start_offset = cmd_plr_start_offset;
+  cmdRetryInfo.gcode_info.plr_end_offset = cmd_plr_end_offset;
+  cmdRetryInfo.gcode_info.plr_offset_valid = cmd_plr_offset_valid;
 }
 
 // purge gcode cmd or send it to the printer and then remove it from cmdQueue queue
@@ -286,7 +346,14 @@ static bool sendCmd(bool purge, bool avoidTerminal)
   {
     // if the command under processing is from command queue and COMMAND_CHECKSUM feature is enabled,
     // apply line number and checksum and store the new gcode on the retry buffer
-    if (!cmdRetryInfo.retry && GET_BIT(infoSettings.general_settings, INDEX_COMMAND_CHECKSUM) == 1)
+    // Keep connection probes unnumbered. During simultaneous power-up the TFT
+    // can transmit several M105 probes before Marlin is ready; numbering those
+    // would leave Marlin seeing (for example) N4 as its first line and asking
+    // forever for the probes lost during boot. Once connected, the queued M110
+    // synchronizes both counters before normal checksummed traffic starts.
+    if (!cmdRetryInfo.retry &&
+        infoHost.connected &&
+        GET_BIT(infoSettings.general_settings, INDEX_COMMAND_CHECKSUM) == 1)
       setCmdRetryInfo(addCmdLineNumberAndChecksum(cmd_ptr, cmd_base_index, &cmd_len));  // cmd_ptr and cmd_len are updated
 
     // send or resend command
@@ -560,7 +627,7 @@ void handleCmdLineNumberMismatch(const uint32_t lineNumber)
 
     CMD cmd;
 
-    sprintf(cmd, "M110 N%lu", lineNumber);
+    sprintf(cmd, "M110 N%lu\n", lineNumber);
 
     sendEmergencyCmd(cmd);  // immediately send M110 command to set new base line number on mainboard
   }
@@ -644,6 +711,7 @@ void sendQueueCmd(void)
     return;
 
   bool avoid_terminal = false;
+  bool retry = false;
 
   if (cmdRetryInfo.retry)  // if there is a pending command to resend
   {
@@ -653,6 +721,27 @@ void sendQueueCmd(void)
   }
 
   bool fromTFT = getCmd();  // retrieve leading gcode in the queue and check if it is originated by TFT or other hosts
+
+  cmd_plr_motion = false;
+
+  if (cmd_plr_offset_valid && cmd_ptr[cmd_base_index] == 'G')
+  {
+    switch (strtol(&cmd_ptr[cmd_base_index + 1], NULL, 10))
+    {
+      case 0:
+      case 1:
+      case 2:
+      case 3:
+      case 5:
+        cmd_plr_motion = true;
+        break;
+    }
+  }
+
+  // Capture the state before this file command is parsed. If Marlin later
+  // reports that its planner was executing this command, recovery resumes at
+  // the start of the command and safely replays it instead of leaving a gap.
+  powerFailedPrepare(cmd_plr_start_offset, cmd_plr_offset_valid);
 
   #ifdef SERIAL_PORT_2
     if (writing_mode != NO_WRITING)  // if writing mode (previously triggered by M28)
@@ -1590,6 +1679,7 @@ send_cmd:
   //   - if TFT is connected, update tx slots and tx count
   //   - if TFT is not connected, consider the command as an out of band message
   //
+  retry = cmdRetryInfo.retry;
   if (sendCmd(false, avoid_terminal) == true && infoHost.connected == true)
   {
     // decrease the number of available tx slots and increase the pending commands tx count
@@ -1599,5 +1689,15 @@ send_cmd:
     //
     infoHost.tx_slots--;
     infoHost.tx_count++;
+
+    if (!retry)
+    {
+      uint32_t lineNumber = GET_BIT(infoSettings.general_settings, INDEX_COMMAND_CHECKSUM)
+                              ? cmdRetryInfo.line_number
+                              : 0;
+
+      powerFailedTrackSent(cmd_plr_end_offset, cmd_plr_offset_valid,
+                           lineNumber, cmd_plr_motion);
+    }
   }
 }  // sendQueueCmd

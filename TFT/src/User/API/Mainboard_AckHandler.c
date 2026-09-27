@@ -308,6 +308,39 @@ static inline void hostActionCommands(void)
   {
     setPrintAbort();
   }
+  else if (ack_seen(":powerloss"))
+  {
+    uint32_t lineNumber = 0;
+    float physicalZ = 0.0f;
+    float physicalE = 0.0f;
+    bool lineNumberValid = false;
+    bool physicalZValid = false;
+    bool physicalEValid = false;
+
+    // Extended format emitted by the paired Marlin firmware:
+    //   //action:powerloss N<executing line> Z<physical Z> E<physical E>
+    if (ack_continue_seen(" N"))
+    {
+      lineNumber = strtoul(&ack_cache[ack_index], NULL, 10);
+      lineNumberValid = (lineNumber != 0);
+    }
+
+    if (ack_continue_seen(" Z"))
+    {
+      physicalZ = ack_value();
+      physicalZValid = true;
+    }
+
+    if (ack_continue_seen(" E"))
+    {
+      physicalE = ack_value();
+      physicalEValid = true;
+    }
+
+    powerFailedEmergencySave(lineNumber, lineNumberValid,
+                             physicalZ, physicalZValid,
+                             physicalE, physicalEValid);
+  }
   else if (ack_seen(":prompt_begin "))
   {
     strncpy_no_pad(hostAction.prompt_begin, ack_cache + ack_index, sizeof(hostAction.prompt_begin));
@@ -383,7 +416,15 @@ void parseAck(void)
     {
       // parse error information even though not connected to printer
       if (ack_seen(magic_error))
-        ackPopupInfo(magic_error);
+      {
+        // After a power cut Marlin may remain alive on the UPS while the TFT
+        // resets in the middle of a checksummed "N...*..." transmission. The
+        // first probe newline then makes Marlin report the harmless truncated
+        // line. M110 synchronizes the stream as soon as the link reconnects,
+        // so don't alarm the user for this expected pre-connection residue.
+        if (!ack_seen("Last Line:"))
+          ackPopupInfo(magic_error);
+      }
 
       // the first response should be such as "T:25/50\n"
       // the "T:0" response is specifically for Marlin when EXTRUDER_COUNT:0
@@ -414,6 +455,12 @@ void parseAck(void)
       }
       else if (infoMachineSettings.firmwareType == FW_NOT_DETECTED)  // if never connected to the printer since boot
       {
+        // Make the first checksummed command an M110. Marlin accepts M110
+        // regardless of its previous Last Line value, so both ends start the
+        // numbered stream from the same value after every (re)connection.
+        if (GET_BIT(infoSettings.general_settings, INDEX_COMMAND_CHECKSUM))
+          storeCmd("M110\n");
+
         storeCmd("M503\n");  // query detailed printer capabilities
         storeCmd("M92\n");   // steps/mm of extruder is an important parameter for Smart filament runout
                              // avoid can't getting this parameter due to disabled M503 in Marlin

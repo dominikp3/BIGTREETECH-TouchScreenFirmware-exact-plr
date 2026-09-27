@@ -29,7 +29,18 @@ bool powerFailedLoad(FIL * print_fp);
 
 bool powerFailedExist(void);
 void powerFailedCreate(const char * path);
-void powerFailedCache(uint32_t offset);
+void powerFailedSave(void);
+void powerFailedEmergencySave(uint32_t lineNumber, bool lineNumberValid,
+                              float physicalZ, bool physicalZValid,
+                              float physicalE, bool physicalEValid);
+void powerFailedAckReset(void);
+void powerFailedAckInvalidate(void);
+void powerFailedPrepare(uint32_t resumeOffset, bool valid);
+void powerFailedTrackSent(uint32_t endOffset, bool valid,
+                          uint32_t lineNumber, bool motion);
+void powerFailedAckConfirm(void);
+void powerFailedBeginPause(float x, float y, float z, float e,
+                           uint32_t feedrate, bool relative, bool relativeE);
 void powerFailedDelete(void);
 
 #ifdef __cplusplus

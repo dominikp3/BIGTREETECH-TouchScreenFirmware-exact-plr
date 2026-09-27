@@ -496,6 +496,9 @@ bool startPrint(void)
   // we assume infoPrinting is clean, so we need to set only the needed attributes
   infoPrinting.printing = true;
 
+  if (printRestore)
+    mustStoreCmd("M75\n");
+
   // execute pre print start tasks
   if (!printRestore && GET_BIT(infoSettings.send_gcodes, SEND_GCODES_START_PRINT))  // PLR continue printing, CAN NOT use start gcode
     sendPrintCodes(0);
@@ -639,7 +642,20 @@ bool pausePrint(bool isPause, PAUSE_TYPE pauseType)
         }
         else if (pauseType == PAUSE_NORMAL)  // send command only for pause originated from TFT
         {
+          // Stop feeding the print file, wait for every accepted move to
+          // physically finish, and only then capture the pause return point.
+          // This makes PLR deterministic both after parking and if power is
+          // lost part-way through the following Z raise.
+          infoPrinting.paused = true;
+          TASK_LOOP_WHILE(!isIdleCmdQueue());
+          mustStoreCmd("M400\n");
+          TASK_LOOP_WHILE(!isIdleCmdQueue());
+
           coordinateGetAll(&tmp);
+
+          powerFailedBeginPause(tmp.axis[X_AXIS], tmp.axis[Y_AXIS],
+                                tmp.axis[Z_AXIS], tmp.axis[E_AXIS],
+                                tmp.feedrate, isRelative, isRelativeE);
 
           if (isRelative == true)  mustStoreCmd("G90\n");
           if (isRelativeE == true) mustStoreCmd("M82\n");
@@ -817,10 +833,12 @@ void loopPrintFromTFT(void)
   if (powerFailedInitRestore())  // initialize print restore, if any, if not already initialized (one shot flag)
     return;
 
-  powerFailedCache(infoPrinting.file.fptr);  // update Power-loss Recovery file
+  powerFailedSave();  // update Power-loss Recovery file
 
   CMD      gcode;
   uint8_t  gcode_count = 0;
+  bool     gcode_found = false;
+  uint32_t plr_start_offset = infoPrinting.file.fptr;
   char     read_char = '\0';
   UINT     br = 0;
   FIL *    ip_file = &infoPrinting.file;
@@ -841,7 +859,8 @@ void loopPrintFromTFT(void)
       {
         gcode[gcode_count++] = '\n';
         gcode[gcode_count] = '\0';  // terminate string
-        storeCmdFromUART(gcode, PORT_1);
+        gcode_found = true;
+        //storeCmdFromUART(gcode, PORT_1);
 
         break;
       }
@@ -905,6 +924,11 @@ void loopPrintFromTFT(void)
 
     if (comment_parsing)  // parse comment from gcode file
       parseComment();
+  }
+
+  if (gcode_found)
+  {
+    storePrintCmdFromUART(gcode, PORT_1, plr_start_offset, infoPrinting.file.fptr);
   }
 
   if (gcode_count == 0)

@@ -198,6 +198,10 @@ static bool InfoHost_HandleAckTimeout(void)
 
   infoHost.rx_timestamp = infoHost.rx_ok_timestamp = OS_GetTimeMs();  // update timestamp
 
+  // A timeout only releases the transport slot. It is not proof that Marlin
+  // accepted the command, so stop advancing exact PLR checkpoints.
+  powerFailedAckInvalidate();
+
   InfoHost_HandleAckOk(HOST_SLOTS_GENERIC_OK);  // release pending gcode
 
   return true;
@@ -208,6 +212,7 @@ void InfoHost_Init(bool isConnected)
   infoHost.target_tx_slots = infoHost.cur_target_tx_slots = infoSettings.tx_slots;
   infoHost.tx_slots = 1;  // set to 1 just to allow a soft start
   infoHost.tx_count = 0;
+  powerFailedAckReset();
   infoHost.tx_delay = infoSettings.tx_delay;
   infoHost.rx_timestamp = infoHost.rx_ok_timestamp = OS_GetTimeMs();
   infoHost.connected = isConnected;
@@ -263,7 +268,10 @@ void InfoHost_HandleAckOk(int16_t target_tx_slots)
   // - an ACK message for an out of band gcode (e.g. emergency gcode) is received
   //
   if (infoHost.tx_count > 0)
+  {
     infoHost.tx_count--;
+    powerFailedAckConfirm();
+  }
 
   // NOTE: the following code always allows to align infoHost.tx_slots even in case of switching ON/OFF
   //       the ADVANCED_OK feature in TFT and/or in case infoHost.tx_slots is beeing also managed by
