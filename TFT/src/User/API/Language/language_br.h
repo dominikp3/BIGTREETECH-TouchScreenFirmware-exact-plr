@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Abaixe a sonda antes de iniciar o ajuste. Levante após terminar."
 #define STRING_DISCONNECT_PROBE       "Certifique-se de que a sonda esteja levantada antes de usar este recurso."
 #define STRING_CALIBRATION            "Calibrar"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

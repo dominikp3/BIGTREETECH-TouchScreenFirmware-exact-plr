@@ -385,4 +385,7 @@ X_WORD (MESH_VALID)
 X_WORD (CONNECT_PROBE)
 X_WORD (DISCONNECT_PROBE)
 X_WORD (CALIBRATION)
+
+// Power-loss recovery safety prompt (appended to preserve existing label addresses)
+X_WORD (PLR_INSPECTION)
 // After changing/adding/removing a word, change the LANGUAGE_FLASH_SIGN in Settings.h

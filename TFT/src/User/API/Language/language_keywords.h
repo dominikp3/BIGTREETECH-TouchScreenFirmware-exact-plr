@@ -385,6 +385,7 @@ extern "C" {
 #define LANG_KEY_CONNECT_PROBE          "label_connect_probe:"
 #define LANG_KEY_DISCONNECT_PROBE       "label_disconnect_probe:"
 #define LANG_KEY_CALIBRATION            "label_calibration:"
+#define LANG_KEY_PLR_INSPECTION         "label_plr_inspection:"
 
 #ifdef __cplusplus
 }

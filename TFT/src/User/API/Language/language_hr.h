@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Povežite ticalo prije pokretanja procesa. Obavezno ga odspojite nakon toga."
 #define STRING_DISCONNECT_PROBE       "Provjerite jeste li odspojili ticalo prije korištenja ove funkcije."
 #define STRING_CALIBRATION            "Kalibriraj"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

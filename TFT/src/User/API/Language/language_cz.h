@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Před zahájením procesu připojte sondu. Poté ji nezapomeňte odpojit."
 #define STRING_DISCONNECT_PROBE       "Před použitím této funkce se ujistěte, že jste odpojili sondu"
 #define STRING_CALIBRATION            "Kalibrace"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

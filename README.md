@@ -52,8 +52,12 @@ with:
   retract, preventing resumed printing in air.
 - Restores native Z with `G92.9`, avoiding accumulated `G92` workspace
   offsets during repeated outages in the same print.
-- Homes X/Y without homing Z, moves X to 0 to release the HallON deployment
-  button, and waits for the heaters before priming and returning to the print.
+- Restores and waits for all saved temperatures before moving any motor, so a
+  cold filament string cannot pull a small print from the bed during homing.
+- Homes X/Y without homing Z and moves X to 0 to release the HallON deployment
+  button only after heating has completed.
+- Blocks recovery after parking and asks the user to stow protruding probes and
+  remove filament or strings from the nozzle before explicitly continuing.
 - Resynchronizes checksummed serial traffic with `M110` after startup and
   suppresses the harmless truncated-line warning caused by an outage.
 - Retains a conservative motion-history fallback if the final extended
@@ -91,6 +95,13 @@ your mechanics and extruder.
 Delete any old `Printing.sys` before first booting this fork. The file format
 is versioned and is not compatible with recovery records produced by the
 upstream firmware or older revisions of this fork.
+
+This fork adds a translated recovery inspection prompt. If a secondary
+language is enabled with `language:1`, copy the matching updated
+`language_xx.ini` file from the
+[`Language Packs`](./Copy%20to%20SD%20Card%20root%20directory%20to%20update/Language%20Packs/)
+directory to the root of the update card together with the firmware binary.
+For the tested Polish setup, use `language_pl.ini`.
 
 ### Prebuilt firmware
 

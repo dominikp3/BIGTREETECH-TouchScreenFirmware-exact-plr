@@ -14,7 +14,7 @@ extern "C" {
 #define CONFIG_SUPPPORT       20250130  // (YYYYMMDD) change if any keyword(s) in Configuration.h is added, removed or changed.
                                         // This number should match CONFIGURATION_H_VERSION in Configuration.h
 #define CONFIG_FLASH_SIGN     20250130  // (YYYYMMDD) change if any keyword(s) in config.ini is added or removed
-#define LANGUAGE_FLASH_SIGN   20250130  // (YYYYMMDD) change if any keyword(s) in language pack is added or removed
+#define LANGUAGE_FLASH_SIGN   20260928  // (YYYYMMDD) change if any keyword(s) in language pack is added or removed
 #define ICON_FLASH_SIGN       20230821  // (YYYYMMDD) change if any icon(s) is added or removed
 #define FONT_FLASH_SIGN       20230821  // (YYYYMMDD) change if fonts require updating
 

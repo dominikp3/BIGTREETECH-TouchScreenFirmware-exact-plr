@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "A folyamat megkezdése előtt\ncsatlakoztassa a szondát.\nGyőződjön meg róla,\nhogy utána lekapcsolja."
 #define STRING_DISCONNECT_PROBE       "A funkció használata előtt\ngyőződjön meg arról, hogy\nleválasztotta a szondát."
 #define STRING_CALIBRATION            "Kalibráció"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

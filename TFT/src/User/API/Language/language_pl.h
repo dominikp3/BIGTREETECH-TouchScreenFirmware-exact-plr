@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Podłącz sondę przed rozpoczęciem procesu. Pamiętaj, aby później ją odłączyć."
 #define STRING_DISCONNECT_PROBE       "Upewnij się, że sonda została odłączona przed użyciem tej funkcji."
 #define STRING_CALIBRATION            "Kalibrowanie"
+#define STRING_PLR_INSPECTION         "Schowaj wystające czujniki.\nUsuń filament lub nitki\nz dyszy i kliknij Kontynuuj."
 
 #endif

@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Connectez le palpeur avant de démarrer le processus. Veillez à le déconnecter ensuite."
 #define STRING_DISCONNECT_PROBE       "Assurez-vous d'avoir déconnecté le palpeur avant d'utiliser cette fonctionnalité."
 #define STRING_CALIBRATION            "Calibrer"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

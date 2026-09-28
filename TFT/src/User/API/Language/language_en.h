@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Connect probe before starting the process. Make sure to disconnect it afterwards."
 #define STRING_DISCONNECT_PROBE       "Make sure you have disconnected probe before using this feature."
 #define STRING_CALIBRATION            "Calibrate"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

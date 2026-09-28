@@ -378,5 +378,6 @@
 #define STRING_CONNECT_PROBE          "Bitte Sensor anschließen, bevor der Vorgang gestartet wird. Danach bitte Sensor wieder trennen."
 #define STRING_DISCONNECT_PROBE       "Bitte sicherstellen, dass vor Nutzung dieser Funktion der Sensor getrennt wurde."
 #define STRING_CALIBRATION            "Kalibrierung"
+#define STRING_PLR_INSPECTION         "Check and stow protruding probes.\nRemove filament or strings\nfrom the nozzle, then continue."
 
 #endif

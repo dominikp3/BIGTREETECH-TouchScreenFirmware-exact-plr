@@ -82,9 +82,20 @@ static FIL fpPowerFailed;
 
 static bool restore = false;     // print restore flag disabled by default
 static bool restore_ok = false;  // print restore initialization flag disabled by default
-static bool restore_heating = false;  // restore preheat stage was enqueued
 static bool load_ok = false;     // PLR file loading flag disabled by default
 static bool create_ok = false;   // PLR file creation flag disabled by default
+
+typedef enum
+{
+  PLR_RESTORE_HEAT = 0,
+  PLR_RESTORE_PARK,
+  PLR_RESTORE_INSPECTION,
+  PLR_RESTORE_RESUME,
+} PLR_RESTORE_STAGE;
+
+static PLR_RESTORE_STAGE restoreStage = PLR_RESTORE_HEAT;
+static bool restoreInspectionPrompted = false;
+static bool restoreInspectionConfirmed = false;
 
 static const PLR_FILE_HEADER plrFileHeader =
 {
@@ -95,6 +106,11 @@ static const PLR_FILE_HEADER plrFileHeader =
 
 static void powerFailedCapture(BREAK_POINT *bp, uint32_t offset);
 static bool powerFailedSelectFallback(BREAK_POINT *bp);
+
+static void powerFailedConfirmInspection(void)
+{
+  restoreInspectionConfirmed = true;
+}
 
 void powerFailedAckReset(void)
 {
@@ -145,7 +161,9 @@ bool powerFailedLoad(FIL * print_fp)
   // set status flag first
   load_ok = false;
   restore_ok = false;
-  restore_heating = false;
+  restoreStage = PLR_RESTORE_HEAT;
+  restoreInspectionPrompted = false;
+  restoreInspectionConfirmed = false;
 
   // if print restore flag is disabled, nothing to do
   if (!restore)
@@ -210,8 +228,38 @@ bool powerFailedInitRestore(void)
   if (!restore_ok)
     return false;
 
-  if (!restore_heating)
+  if (restoreStage == PLR_RESTORE_HEAT)
   {
+    // Restore and wait for all saved temperatures before moving any motor.
+    // In particular, a cold nozzle can pull a thin filament string attached
+    // to a small print strongly enough to detach the print during XY homing.
+    for (uint8_t i = MAX_HEATER_COUNT - 1; i >= MAX_HOTEND_COUNT; i--)  // bed & chamber
+    {
+      if (infoBreakPoint.target[i] != 0)
+        mustStoreCmd("%s S%d\n", heatWaitCmd[i], infoBreakPoint.target[i]);
+    }
+
+    for (int8_t i = infoSettings.hotend_count - 1; i >= 0; i--)  // tool nozzle
+    {
+      if (infoBreakPoint.target[i] != 0)
+        mustStoreCmd("%s S%d\n", heatWaitCmd[i], infoBreakPoint.target[i]);
+    }
+
+    restoreStage = PLR_RESTORE_PARK;
+    return true;
+  }
+
+  // Emulated M109/M190 commands are sent to Marlin as M104/M140. They stop
+  // feeding commands from the print file, but do not stop commands already in
+  // the TFT queue. Do not enqueue motion until heating has really finished and
+  // every command from the heating stage has been acknowledged.
+  if (restoreStage == PLR_RESTORE_PARK)
+  {
+    if (heatIsWaiting() || !isIdleCmdQueue())
+      return true;
+
+    mustStoreCmd("%s\n", toolChange[infoBreakPoint.tool]);
+
     if (infoBreakPoint.feedrate != 0)
     {
       uint16_t z_raised = 0;
@@ -249,7 +297,7 @@ bool powerFailedInitRestore(void)
 
         if (upsZRaised)
           mustStoreCmd("G1 Z%.3f\n",
-                      infoBreakPoint.axis[Z_AXIS] + infoSettings.plr_z_raise);
+                       infoBreakPoint.axis[Z_AXIS] + infoSettings.plr_z_raise);
       }
       else
       {
@@ -257,40 +305,44 @@ bool powerFailedInitRestore(void)
       }
 
       // Move away from the X endstop after homing. On printers using a HallON
-      // probe this releases its deployment button and leaves time to stow the
-      // probe safely while the heaters reach their targets.
+      // probe this releases its deployment button before asking the user to
+      // inspect and stow anything protruding from the toolhead.
       mustStoreCmd("G1 X0 F3000\n");
       mustStoreCmd("M400\n");
     }
 
-    mustStoreCmd("%s\n", toolChange[infoBreakPoint.tool]);
-
-    for (uint8_t i = MAX_HEATER_COUNT - 1; i >= MAX_HOTEND_COUNT; i--)  // bed & chamber
-    {
-      if (infoBreakPoint.target[i] != 0)
-        mustStoreCmd("%s S%d\n", heatWaitCmd[i], infoBreakPoint.target[i]);
-    }
-
-    for (int8_t i = infoSettings.hotend_count - 1; i >= 0; i--)  // tool nozzle
-    {
-      if (infoBreakPoint.target[i] != 0)
-        mustStoreCmd("%s S%d\n", heatWaitCmd[i], infoBreakPoint.target[i]);
-    }
-
-    restore_heating = true;
+    restoreStage = PLR_RESTORE_INSPECTION;
     return true;
   }
 
-  // Emulated M109/M190 commands are sent to Marlin as M104/M140. They stop
-  // feeding commands from the print file, but do not stop commands already in
-  // the TFT queue. Keep the recovery moves out of that queue until heating has
-  // really finished and every command from the preheat stage was acknowledged.
-  if (heatIsWaiting() || !isIdleCmdQueue())
-    return true;
+  if (restoreStage == PLR_RESTORE_INSPECTION)
+  {
+    // M400 is acknowledged only after all parking motion has completed.
+    if (!isIdleCmdQueue())
+      return true;
+
+    if (infoBreakPoint.feedrate != 0 && !restoreInspectionConfirmed)
+    {
+      if (!restoreInspectionPrompted)
+      {
+        restoreInspectionPrompted = true;
+        popupDialog(DIALOG_TYPE_ALERT, LABEL_WARNING, LABEL_PLR_INSPECTION,
+                    LABEL_CONTINUE, LABEL_NULL, powerFailedConfirmInspection, NULL, NULL);
+      }
+
+      // Keep the print file blocked even if the user left the printer
+      // unattended while it was heating.
+      return true;
+    }
+
+    restoreStage = PLR_RESTORE_RESUME;
+  }
 
   // Disable restore initialization before enqueueing the final stage.
   restore_ok = false;
-  restore_heating = false;
+  restoreStage = PLR_RESTORE_HEAT;
+  restoreInspectionPrompted = false;
+  restoreInspectionConfirmed = false;
 
   for (uint8_t i = 0; i < infoSettings.fan_count; i++)
   {
@@ -795,7 +847,9 @@ void powerFailedDelete(void)
 
   load_ok = false;
   restore_ok = false;
-  restore_heating = false;
+  restoreStage = PLR_RESTORE_HEAT;
+  restoreInspectionPrompted = false;
+  restoreInspectionConfirmed = false;
 
   powerFailedAckReset();
   powerLossActive = false;
